@@ -146,7 +146,112 @@ class ILQR():
 				K_closed_loop: [num_dim_u, num_dim_x, T] np.ndarray: closed loop gain.
 				k_closed_loop: [num_dim_u, T] np.ndarray: closed loop bias.
 		'''
+		def backward_pass(trajectory, controls, path_refs, obs_refs, reg=1.0):
+			q, r, Q, R, H = self.cost.get_derivatives_np(trajectory, controls, path_refs, obs_refs)
+    
+			A, B = self.dyn.get_jacobian_np(trajectory, controls)
+			T = self.T
 
+			k_open_loop = np.zeros((self.dim_u, T))
+			K_closed_loop = np.zeros((self.dim_u, self.dim_x, T))
+			# derivative of value function at final step
+			p = q[:,T-1]
+			P = Q[:,:,T-1]
+			t = T-2
+
+			while t>=0:
+				Q_x = q[:,t] + A[:,:,t].T @ p
+				Q_u = r[:,t] + B[:,:,t].T @ p
+				Q_xx = Q[:,:,t] + A[:,:,t].T @ P @ A[:,:,t] 
+				Q_uu = R[:,:,t] + B[:,:,t].T @ P @ B[:,:,t]
+				Q_ux = H[:,:,t] + B[:,:,t].T @ P @ A[:,:,t]
+
+				# Add regularization
+				reg_matrix = reg*np.eye(self.dim_x)
+				Q_uu_reg = R[:,:,t] + B[:,:,t].T @ (P+reg_matrix) @ B[:,:,t]
+				Q_ux_reg = H[:,:,t] + B[:,:,t].T @ (P+reg_matrix) @ A[:,:,t]
+				
+				# check if Q_uu_reg is PD
+				if not np.all(np.linalg.eigvals(Q_uu_reg) > 0) and reg < 1e5:
+					reg *= 5
+					t = T-2
+					p = q[:,T-1]
+					P = Q[:,:,T-1]
+					continue
+
+				Q_uu_reg_inv = np.linalg.inv(Q_uu_reg)
+				# Calculate policy
+				k = -Q_uu_reg_inv@Q_u
+				K = -Q_uu_reg_inv@Q_ux_reg
+				k_open_loop[:,t] = k          
+				K_closed_loop[:, :, t] = K
+
+				# Update value function derivative for the previous time step
+				p = Q_x + K.T @ Q_uu @ k + K.T@Q_u + Q_ux.T@k
+				P = Q_xx + K.T @ Q_uu @ K + K.T@Q_ux + Q_ux.T@K
+				t -= 1
+			reg = max(1e-5, reg*0.5)
+			return K_closed_loop, k_open_loop, reg
+
+
+		def forward_pass(trajectory, controls, Ks, ks, alpha):
+			new_traj = np.zeros_like(trajectory)
+			new_controls = np.zeros_like(controls)
+
+			new_traj[:,0] = trajectory[:,0]
+			T = self.T
+			for t in range(T-1):
+				K = Ks[:,:,t]
+				k = ks[:,t]
+				new_controls[:,t] = controls[:,t] + alpha*k+ K @ (new_traj[:, t] - trajectory[:, t])
+				new_traj[:,t+1], new_controls[:, t] = self.dyn.integrate_forward_np(new_traj[:,t], new_controls[:,t])
+					
+			return new_traj, new_controls
+		
+		def solve_ilqr(trajectory, controls, path_refs, obs_refs):
+			reg = 1
+			steps = 100
+			status = -2
+
+			#initial step
+			J = self.cost.get_traj_cost(trajectory, controls, path_refs, obs_refs)
+
+			converged = False
+			this_path_refs = path_refs
+			this_obs_refs = obs_refs
+			for i in range(steps):
+				
+				alpha = 1
+				Ks, ks, reg = backward_pass(trajectory, controls, this_path_refs, this_obs_refs, reg)
+				
+				changed = False
+				for _ in range(3) :
+					X_new, U_new = forward_pass(trajectory, controls, Ks, ks, alpha)
+					this_path_refs, this_obs_refs = self.get_references(X_new)
+					J_new = self.cost.get_traj_cost(X_new, U_new, this_path_refs, this_obs_refs)
+					#print(J)
+					#print(J_new)
+					if J_new<=J:
+						if np.abs(J - J_new) < 1e-3:
+							converged = True   
+						J = J_new
+						trajectory = X_new
+						controls = U_new
+						changed = True
+						break
+					alpha *= 0.1
+				
+				if not changed:
+					print("line search failed with reg = ", reg, " at step ", i)
+					status = -1
+					break
+				if converged:
+					print("converged after ", i, " steps.")
+					status = 0
+					break
+
+			return trajectory, controls, Ks, ks, status
+		
 		# We first check if the planner is ready
 		if self.ref_path is None:
 			print('No reference path is provided.')
@@ -190,7 +295,7 @@ class ILQR():
 		# 	B: np.ndarray, (dim_u, T) the Jacobian of the dynamics w.r.t. the control.
 		
 		# ******** Functions to roll the dynamics for one step  ************
-		# state_next, control_clip = self.dyn.integrate_forward_np(state, control)
+		##state_next, control_clip = self.dyn.integrate_forward_np(state, control)
 		
 		# Finds the next state of the vehicle given the current state and
 		# control input.
@@ -215,7 +320,7 @@ class ILQR():
 		# 	cost: float, sum of the running cost over the trajectory
 
   		# ******** Functions to get jacobian and hessian of the cost ************
-		# q, r, Q, R, H = self.cost.get_derivatives_np(trajectory, controls, path_refs, obs_refs)
+		##q, r, Q, R, H = self.cost.get_derivatives_np(trajectory, controls, path_refs, obs_refs)
 		
 		# Given the trajectory, control seq, and references, return Jacobians and Hessians of cost function
 		# Input:
@@ -232,16 +337,20 @@ class ILQR():
 		
 		########################### #END of TODO 1 #####################################
 
+		
+		traj, ctrls, Ks, ks, status = solve_ilqr(trajectory, controls, path_refs, obs_refs)
+
 		t_process = time.time() - t_start
 		solver_info = dict(
 				t_process=t_process, # Time spent on planning
-				trajectory = trajectory,
-				controls = controls,
-				status=None, #	TODO: Fill this in
-				K_closed_loop=None, # TODO: Fill this in
-				k_open_loop=None # TODO: Fill this in
+				trajectory = traj,
+				controls = ctrls,
+				status=status, #	TODO: Fill this in
+				K_closed_loop=Ks, # TODO: Fill this in
+				k_open_loop=ks # TODO: Fill this in
 				# Optional TODO: Fill in other information you want to return
 		)
+
 		return solver_info
 
 
