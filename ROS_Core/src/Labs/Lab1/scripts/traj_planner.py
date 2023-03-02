@@ -210,9 +210,16 @@ class TrajectoryPlanner():
         ###############################
         # Implement your control law here using ILQR policy
         # Hint: make sure that the difference in heading is between [-pi, pi]
+        x_diff = x - x_ref
+        if x_diff[3] > np.pi:
+            x_diff[3] = np.pi
+        if x_diff[3] < -np.pi:
+            x_diff[3] = -np.pi
+
+        new_control = u_ref + K_closed_loop @ (x_diff)
         
-        accel = 0 # TO BE REPLACED
-        steer_rate = 0 # TO BE REPLACED
+        accel = new_control[0]# TO BE REPLACED
+        steer_rate = new_control[1] # TO BE REPLACED
 
         ##### END OF TODO ##############
 
