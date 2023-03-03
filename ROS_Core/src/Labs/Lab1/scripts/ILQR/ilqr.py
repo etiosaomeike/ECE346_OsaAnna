@@ -203,7 +203,9 @@ class ILQR():
 			for t in range(T-1):
 				K = Ks[:,:,t]
 				k = ks[:,t]
-				new_controls[:,t] = controls[:,t] + alpha*k+ K @ (new_traj[:, t] - trajectory[:, t])
+				dx = new_traj[:, t] - trajectory[:, t]
+				dx[3] = np.arctan2(np.sin(dx[3]), np.cos(dx[3]))
+				new_controls[:,t] = controls[:,t] + alpha*k+ K @ (dx)
 				new_traj[:,t+1], new_controls[:, t] = self.dyn.integrate_forward_np(new_traj[:,t], new_controls[:,t])
 					
 			return new_traj, new_controls
@@ -254,7 +256,6 @@ class ILQR():
 		
 		# We first check if the planner is ready
 		if self.ref_path is None:
-			print('No reference path is provided.')
 			return dict(status=-1)
 
 		# if no initial control sequence is provided, we assume it is all zeros.

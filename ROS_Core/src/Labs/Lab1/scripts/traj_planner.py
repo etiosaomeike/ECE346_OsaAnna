@@ -211,10 +211,7 @@ class TrajectoryPlanner():
         # Implement your control law here using ILQR policy
         # Hint: make sure that the difference in heading is between [-pi, pi]
         x_diff = x - x_ref
-        if x_diff[3] > np.pi:
-            x_diff[3] = np.pi
-        if x_diff[3] < -np.pi:
-            x_diff[3] = -np.pi
+        x_diff[3] = np.arctan2(np.sin(x_diff[3]), np.cos(x_diff[3]))
 
         new_control = u_ref + K_closed_loop @ (x_diff)
         
@@ -380,7 +377,7 @@ class TrajectoryPlanner():
                 # stop when the progress is not increasing
                 while (progress - prev_progress)*new_path.length > 1e-3: # stop when the progress is not increasing
                     nominal_trajectory.append(state)
-                    new_plan = self.planner.plan(state, None, verbose=False)
+                    new_plan = self.planner.plan(state, None)
                     nominal_controls.append(new_plan['controls'][:,0])
                     K_closed_loop.append(new_plan['K_closed_loop'][:,:,0])
                     
@@ -421,7 +418,34 @@ class TrajectoryPlanner():
         
         rospy.loginfo('Receding Horizon Planning thread started waiting for ROS service calls...')
         t_last_replan = 0
+        
         while not rospy.is_shutdown():
+
+            if self.plan_state_buffer.new_data_available and rospy.get_time() - t_last_replan > self.replan_dt and self.planner_ready:
+                curr_state = self.plan_state_buffer.readFromRT()
+                prev_policy = self.policy_buffer.readFromRT()
+
+                if prev_policy != None:
+                    init_controls = prev_policy.get_ref_controls(rospy.get_time())
+                else:
+                    init_controls = None
+
+                if self.plan_state_buffer.new_data_available:
+                    self.planner.update_ref_path(self.path_buffer.readFromRT())
+                    print("path updated")
+                #else:
+                #    self.planner.update_ref_path(None)
+            
+                replan = self.planner.plan(curr_state, init_controls)
+                if replan["status"] != 0:
+                    continue
+                K_closed_loop = replan["K_closed_loop"]
+                big_T = curr_state.shape[2]
+                new_policy = Policy(curr_state, init_controls, K_closed_loop, rospy.get_time(), self.replan_dt, big_T)
+                self.policy_buffer.writeFromNonRT(new_policy)
+                self.trajectory_pub.publish(new_policy.to_msg())
+
+                t_last_replan = rospy.get_time()
             ###############################
             #### TODO: Task 3 #############
             ###############################

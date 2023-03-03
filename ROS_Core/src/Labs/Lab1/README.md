@@ -6,3 +6,10 @@
 3. Demostate the trajectory planning in simulation and on the real robot.
 
 ![](./assets/example.png)
+
+
+# git pull upstream SP2023
+# git status
+# if ahead, git push
+# git submodule update --recursive
+# git pull upstream SP2023 
