@@ -7,7 +7,7 @@
 
 ![](./assets/example.png)
 
-
+    
 # git pull upstream SP2023
 # git status
 # if ahead, git push
