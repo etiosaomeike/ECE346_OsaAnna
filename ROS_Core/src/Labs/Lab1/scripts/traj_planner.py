@@ -423,6 +423,7 @@ class TrajectoryPlanner():
 
             if self.plan_state_buffer.new_data_available and rospy.get_time() - t_last_replan > self.replan_dt and self.planner_ready:
                 curr_state = self.plan_state_buffer.readFromRT()
+                curr_state = curr_state
                 prev_policy = self.policy_buffer.readFromRT()
 
                 if prev_policy != None:
@@ -430,18 +431,23 @@ class TrajectoryPlanner():
                 else:
                     init_controls = None
 
-                if self.plan_state_buffer.new_data_available:
+                if self.path_buffer.new_data_available:
                     self.planner.update_ref_path(self.path_buffer.readFromRT())
                     print("path updated")
                 #else:
                 #    self.planner.update_ref_path(None)
             
-                replan = self.planner.plan(curr_state, init_controls)
+                replan = self.planner.plan(curr_state[:-1], init_controls)
+                
                 if replan["status"] != 0:
                     continue
                 K_closed_loop = replan["K_closed_loop"]
-                big_T = curr_state.shape[2]
-                new_policy = Policy(curr_state, init_controls, K_closed_loop, rospy.get_time(), self.replan_dt, big_T)
+                controls = replan["controls"]
+                states = replan["trajectory"]
+                big_T = states.shape[-1]
+                controls = controls
+                states = states
+                new_policy = Policy(states, controls, K_closed_loop, rospy.get_rostime().to_sec(), self.replan_dt, big_T)
                 self.policy_buffer.writeFromNonRT(new_policy)
                 self.trajectory_pub.publish(new_policy.to_msg())
 
