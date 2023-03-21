@@ -12,4 +12,7 @@
 # git status
 # if ahead, git push
 # git submodule update --recursive
+# OR git submodule update --init  
+# then git submodule update --init --recursive
 # git pull upstream SP2023 
+# :wq then enter
