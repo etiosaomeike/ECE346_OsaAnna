@@ -50,6 +50,8 @@ class TrajectoryPlanner():
 
         self.setup_service()
 
+        self.static_obstacle_dict = {}
+
         # start planning and control thread
         threading.Thread(target=self.control_thread).start()
         if not self.receding_horizon:
@@ -69,6 +71,7 @@ class TrajectoryPlanner():
         # Read ROS topic names to subscribe 
         self.odom_topic = get_ros_param('~odom_topic', '/slam_pose')
         self.path_topic = get_ros_param('~path_topic', '/Routing/Path')
+        self.static_obs_topic = get_ros_param('∼static_obs_topic', '/Obstacles/Static') # this gets subscriber for static obstacles
         
         
         # Read ROS topic names to publish
@@ -124,6 +127,7 @@ class TrajectoryPlanner():
         '''
         self.pose_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odometry_callback, queue_size=10)
         self.path_sub = rospy.Subscriber(self.path_topic, PathMsg, self.path_callback, queue_size=10)
+        self.obs_sub = rospy.Subscriber(self.static_obs_topic, MarkerArray, self.static_obs_callback, queue_size=10)
 
     def setup_service(self):
         '''
@@ -169,6 +173,17 @@ class TrajectoryPlanner():
         # Then it will be processed and add to the planner buffer 
         # inside the controller thread
         self.control_state_buffer.writeFromNonRT(odom_msg)
+
+    def static_obs_callback(self, static_obs_msg):
+        '''
+        Subscriber callback function of the robot pose
+        '''
+        # Add the current state to the buffer
+        # Controller thread will read from the buffer
+        # Then it will be processed and add to the planner buffer 
+        # inside the controller thread
+        id, vertices = get_obstacle_vertices(static_obs_msg)
+        self.static_obstacle_dict[id] = vertices
     
     def path_callback(self, path_msg):
         x = []
