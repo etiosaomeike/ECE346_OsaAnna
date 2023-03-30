@@ -459,6 +459,11 @@ class TrajectoryPlanner():
                     print("path updated")
                 #else:
                 #    self.planner.update_ref_path(None)
+
+                obstacles_list = []
+                for obs_key in self.static_obstacle_dict.keys():
+                    obstacles_list.append(self.static_obstacle_dict[obs_key])
+                self.planner.update_obstacles(obstacles_list)
             
                 replan = self.planner.plan(curr_state[:-1], init_controls)
                 
