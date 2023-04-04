@@ -50,6 +50,8 @@ class TrajectoryPlanner():
 
         self.setup_service()
 
+        self.setup_client()
+
         self.static_obstacle_dict = {}
 
         # start planning and control thread
@@ -96,6 +98,9 @@ class TrajectoryPlanner():
         else:
             self.ilqr_params_abs_path = os.path.join(self.package_path, ilqr_params_file)
         
+    def setup_client(self):
+        self.frs_client = rospy.ServiceProxy('/obstacles/get_frs', GetFRS)
+        
     def setup_planner(self):
         '''
         This function setup the ILQR solver
@@ -120,6 +125,8 @@ class TrajectoryPlanner():
 
         # Publisher for the control command
         self.control_pub = rospy.Publisher(self.control_topic, ServoMsg, queue_size=1)
+        self.frs_pub = rospy.Publisher("/vis/FRS", MarkerArray, queue_size=1)
+
 
     def setup_subscriber(self):
         '''
@@ -182,8 +189,9 @@ class TrajectoryPlanner():
         # Controller thread will read from the buffer
         # Then it will be processed and add to the planner buffer 
         # inside the controller thread
-        id, vertices = get_obstacle_vertices(static_obs_msg)
-        self.static_obstacle_dict[id] = vertices
+        for message in static_obs_msg.markers:
+            id, vertices = get_obstacle_vertices(message)
+            self.static_obstacle_dict[id] = vertices
     
     def path_callback(self, path_msg):
         x = []
@@ -444,6 +452,8 @@ class TrajectoryPlanner():
         
         while not rospy.is_shutdown():
 
+            
+
             if self.plan_state_buffer.new_data_available and rospy.get_time() - t_last_replan > self.replan_dt and self.planner_ready:
                 curr_state = self.plan_state_buffer.readFromRT()
                 curr_state = curr_state
@@ -461,8 +471,17 @@ class TrajectoryPlanner():
                 #    self.planner.update_ref_path(None)
 
                 obstacles_list = []
+
                 for obs_key in self.static_obstacle_dict.keys():
                     obstacles_list.append(self.static_obstacle_dict[obs_key])
+                
+                request = rospy.get_time() + np.arange(self.planner.T)*self.planner.dt
+                response = self.frs_client(request)
+                frs_marker_array = frs_to_msg(response)
+                self.frs_pub.publish(frs_marker_array)
+                unextended_obs = frs_to_obstacle(response)
+                unextended_obs.extend(obstacles_list)
+                
                 self.planner.update_obstacles(obstacles_list)
             
                 replan = self.planner.plan(curr_state[:-1], init_controls)

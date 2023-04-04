@@ -32,6 +32,7 @@ class DynObstacle():
         self.dyn_obs_topic = get_ros_param('~dyn_obs_topic', '/Obstacles/Dynamic')
 
         self.frs = FRS()
+        
 
         ###############################################
         ############## TODO ###########################
@@ -47,7 +48,7 @@ class DynObstacle():
         ###############################################
         # Class variable to store the most recent dynamic obstacle's poses
         self.dyn_obstacles = []
-        
+        self.frs_sub = rospy.Subscriber(self.dyn_obs_topic, OdometryArray, self.frs_callback, queue_size=10)
         ###############################################
         ############## TODO ###########################
         # 1. Create a Dynamic Reconfigure Server to get <configConfig> message
@@ -70,7 +71,8 @@ class DynObstacle():
         self.dy = 0 
         self.allow_lane_change = False
 
-        
+        drServer = Server(configConfig, self.drServer_Callback)
+
         # Create a service server to calculate the FRS
         reset_srv = rospy.Service('/obstacles/get_frs', GetFRS, self.srv_cb)
 
@@ -87,6 +89,22 @@ class DynObstacle():
         # Here is the tutorial for dynamic reconfigure
         # http://wiki.ros.org/ROS/Tutorials/WritingServiceClient%28python%29
         ###############################################
+    
+    def drServer_Callback(self, config, level):
+            self.K_vx = config["K_vx"]
+            self.K_vy = config["K_vy"]
+            self.K_y = config["K_y"]
+            self.dx = config["dx"]
+            self.dy = config["dy"]
+            self.allow_lane_change = config["allow_lane_change"]
+
+            return config 
+
+    def frs_callback(self, odom_msg):
+        '''
+        Subscriber callback function of the dynamic obstacles
+        '''
+        self.dyn_obstacles = odom_msg.odom_list
 
     def srv_cb(self, req):
         '''
@@ -104,5 +122,6 @@ if __name__ == '__main__':
     ##########################################
     #TODO: Initialize a ROS Node with a DynObstacle object
     ##########################################
-    
-    pass
+    rospy.init_node("dyn_obstacle_node", anonymous = False)
+    d_Obs = DynObstacle()
+    rospy.spin()
