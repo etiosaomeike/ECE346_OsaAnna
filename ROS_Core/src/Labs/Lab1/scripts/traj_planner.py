@@ -452,8 +452,6 @@ class TrajectoryPlanner():
         
         while not rospy.is_shutdown():
 
-            
-
             if self.plan_state_buffer.new_data_available and rospy.get_time() - t_last_replan > self.replan_dt and self.planner_ready:
                 curr_state = self.plan_state_buffer.readFromRT()
                 curr_state = curr_state
@@ -481,7 +479,7 @@ class TrajectoryPlanner():
                 self.frs_pub.publish(frs_marker_array)
                 unextended_obs = frs_to_obstacle(response)
                 unextended_obs.extend(obstacles_list)
-                
+
                 self.planner.update_obstacles(obstacles_list)
             
                 replan = self.planner.plan(curr_state[:-1], init_controls)
