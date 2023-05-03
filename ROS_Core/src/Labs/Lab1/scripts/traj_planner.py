@@ -452,51 +452,57 @@ class TrajectoryPlanner():
         
         while not rospy.is_shutdown():
 
-            if self.plan_state_buffer.new_data_available and rospy.get_time() - t_last_replan > self.replan_dt and self.planner_ready:
+            if self.plan_state_buffer.new_data_available:
                 curr_state = self.plan_state_buffer.readFromRT()
                 curr_state = curr_state
-                prev_policy = self.policy_buffer.readFromRT()
+                t_cur = curr_state[-1]
+                dt = t_cur - t_last_replan
 
-                if prev_policy != None:
-                    init_controls = prev_policy.get_ref_controls(rospy.get_time())
-                else:
+                if dt >= self.replan_dt:
                     init_controls = None
+                    prev_policy = self.policy_buffer.readFromRT()
 
-                if self.path_buffer.new_data_available:
-                    self.planner.update_ref_path(self.path_buffer.readFromRT())
-                    print("path updated")
-                #else:
-                #    self.planner.update_ref_path(None)
+                    if prev_policy != None:
+                        init_controls = prev_policy.get_ref_controls(t_cur)
 
-                obstacles_list = []
+                    if self.path_buffer.new_data_available:
+                        self.planner.update_ref_path(self.path_buffer.readFromRT())
+                        print("path updated")
+                    #else:
+                    #    self.planner.update_ref_path(None)
 
-                for obs_key in self.static_obstacle_dict.keys():
-                    obstacles_list.append(self.static_obstacle_dict[obs_key])
+                    obstacles_list = []
+
+                    for obs_key in self.static_obstacle_dict.keys():
+                        obstacles_list.append(self.static_obstacle_dict[obs_key])
+                    
+                    try:
+                        request = t_cur + np.arange(self.planner.T)*self.planner.dt
+                        response = self.frs_client(request)
+                        obstacles_list.extend(frs_to_obstacle(response))
+                        self.frs_pub.publish(frs_to_msg(response))
+                    except:
+                        rospy.logwarn_once('FRS server not available!')
+                        response = None
+                    self.planner.update_obstacles(obstacles_list)
                 
-                request = rospy.get_time() + np.arange(self.planner.T)*self.planner.dt
-                response = self.frs_client(request)
-                frs_marker_array = frs_to_msg(response)
-                self.frs_pub.publish(frs_marker_array)
-                unextended_obs = frs_to_obstacle(response)
-                unextended_obs.extend(obstacles_list)
+                    replan = self.planner.plan(curr_state[:-1], init_controls)
+                    
+                    if replan["status"] != 0:
+                        continue
 
-                self.planner.update_obstacles(obstacles_list)
-            
-                replan = self.planner.plan(curr_state[:-1], init_controls)
-                
-                if replan["status"] != 0:
-                    continue
-                K_closed_loop = replan["K_closed_loop"]
-                controls = replan["controls"]
-                states = replan["trajectory"]
-                big_T = states.shape[-1]
-                controls = controls
-                states = states
-                new_policy = Policy(states, controls, K_closed_loop, rospy.get_rostime().to_sec(), self.replan_dt, big_T)
-                self.policy_buffer.writeFromNonRT(new_policy)
-                self.trajectory_pub.publish(new_policy.to_msg())
+                    if self.planner_ready:
+                        K_closed_loop = replan["K_closed_loop"]
+                        controls = replan["controls"]
+                        states = replan["trajectory"]
+                        big_T = states.shape[-1]
+                        controls = controls
+                        states = states
+                        new_policy = Policy(states, controls, K_closed_loop, t_cur, self.planner.dt, self.planner.T)
+                        self.policy_buffer.writeFromNonRT(new_policy)
+                        self.trajectory_pub.publish(new_policy.to_msg())
 
-                t_last_replan = rospy.get_time()
+                        t_last_replan = t_cur
             ###############################
             #### TODO: Task 3 #############
             ###############################
