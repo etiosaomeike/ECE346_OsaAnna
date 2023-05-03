@@ -32,6 +32,9 @@ class TrajectoryPlanner():
     '''
 
     def __init__(self):
+
+        print("made traj planner")
+
         # Indicate if the planner is used to generate a new trajectory
         self.update_lock = threading.Lock()
         self.latency = 0.0
@@ -239,7 +242,7 @@ class TrajectoryPlanner():
         # Implement your control law here using ILQR policy
         # Hint: make sure that the difference in heading is between [-pi, pi]
         x_diff = x - x_ref
-        x_diff[3] = np.arctan2(np.sin(x_diff[3]), np.cos(x_diff[3]))
+        x_diff[3] = np.mod(x_diff[3] + np.pi, 2 * np.pi) - np.pi
 
         new_control = u_ref + K_closed_loop @ (x_diff)
         
@@ -453,12 +456,14 @@ class TrajectoryPlanner():
         while not rospy.is_shutdown():
 
             if self.plan_state_buffer.new_data_available:
+                #print("data")
                 curr_state = self.plan_state_buffer.readFromRT()
                 curr_state = curr_state
                 t_cur = curr_state[-1]
                 dt = t_cur - t_last_replan
-
+                #print("dt",dt)
                 if dt >= self.replan_dt:
+                    
                     init_controls = None
                     prev_policy = self.policy_buffer.readFromRT()
 
@@ -492,10 +497,10 @@ class TrajectoryPlanner():
                         continue
 
                     if self.planner_ready:
+                        print("t last replan updated")
                         K_closed_loop = replan["K_closed_loop"]
                         controls = replan["controls"]
                         states = replan["trajectory"]
-                        big_T = states.shape[-1]
                         controls = controls
                         states = states
                         new_policy = Policy(states, controls, K_closed_loop, t_cur, self.planner.dt, self.planner.T)
