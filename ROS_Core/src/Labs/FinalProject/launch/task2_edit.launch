@@ -24,6 +24,7 @@
 
     
     <node pkg="final_project" type="task2_controller_nodewrapper.py" name="task2_controller" output="$(arg output)">
+    
     </node>
    
     <node pkg="racecar_planner" type="traj_planning_node.py" name="traj_planning" output="$(arg output)">
@@ -31,7 +32,7 @@
         <param name="control_topic"        value="$(arg control_topic)" />
         <param name="obstacle_topic"       value="$(arg obstacle_topic)" />
         <param name="package_path"         value="$(find racecar_planner)" />
-        <param name="simulation"           value="False" />
+        <param name="simulation"           value="True" />
         <param name="replan_dt"            value="0.1" />
         <param name="receding_horizon"     value="true" />
         <param name="ilqr_params_file"     value="configs/lab1.yaml" />

@@ -120,7 +120,7 @@ class Task2_Controller:
         self.plan_client = rospy.ServiceProxy('/routing/plan', Plan)
 
 
-        self.odom_topic = get_ros_param('~odom_topic', '/slam_pose')
+        self.odom_topic = get_ros_param('~odom_topic', '/Simulation/Pose')
         self.pose_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odometry_callback, queue_size=10)
         
 
@@ -153,28 +153,26 @@ class Task2_Controller:
         self.truck_x = odom_msg.pose.pose.position.x
         self.truck_y = odom_msg.pose.pose.position.y
 
-        print("updated to ", self.truck_x, self.truck_y)
+        #print("updated to ", self.truck_x, self.truck_y)
 
 
 
     def loop(self):
-        time.sleep(5)
+        time.sleep(15)
         warehouses = list(self.warehouse_info.keys())
         print("warehouses: ", warehouses)
         idx = 0
         while rospy.is_shutdown() is False:  
-            
-            
             self.go_to(* self.warehouse_info[warehouses[idx]]["location"])
             print("published a message for ",warehouses[idx])
-            time.sleep(10)
+            time.sleep(15)
             idx+=1
             if idx==5: idx=0
 
-    def truck_in_warehouse(x, y, warehouse_name, warehouse_info):
-        w_x = warehouse_info[warehouse_name]['location'][0]
-        w_y = warehouse_info[warehouse_name]['location'][1]
-        return abs(w_x-x)<0.5 and abs(w_y-y)<0.25
+    def truck_in_warehouse(self, warehouse_name):
+        w_x = self.warehouse_info[warehouse_name]['location'][0]
+        w_y = self.warehouse_info[warehouse_name]['location'][1]
+        return abs(w_x-self.truck_x)<0.5 and abs(w_y-self.truck_y)<0.25
     
     def go_to(self, x_goal, y_goal):
         # todo: get x start and y start from car current position
@@ -187,6 +185,9 @@ class Task2_Controller:
         #convert PlanMsg to PathMsg
         #untested
         path_msg = plan_response.path
+
+        path_msg.header.stamp = rospy.get_rostime()
+        path_msg.header.frame_id = 'map'
 
         #Publish PathMsg to a path_topic that traj_planner is listening to 
         self.path_pub.publish(path_msg)
