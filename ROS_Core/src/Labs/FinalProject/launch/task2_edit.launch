@@ -11,6 +11,7 @@
 
     <!-- TODO: add your decision making and trajectory planning nodes here -->
     <!-- This section launch the simulation of the student truck -->
+    
     <include file="$(find racecar_interface)/launch/simulation.launch" >
         <arg name="odom_topic"              value="$(arg odom_topic)" />
         <arg name="control_topic"           value="$(arg control_topic)" />
@@ -20,8 +21,9 @@
         <arg name="init_yaw"                value="$(arg init_yaw)" />
         <arg name="lane_change_cost"        value="$(arg lane_change_cost)"/>
     </include>
+
     
-    <node pkg="final_project" type="task2_edit_node.py" name="task2_edit" output="$(arg output)">
+    <node pkg="final_project" type="task2_controller_nodewrapper.py" name="task2_controller" output="$(arg output)">
     </node>
    
     <node pkg="racecar_planner" type="traj_planning_node.py" name="traj_planning" output="$(arg output)">

@@ -12,13 +12,20 @@ from geometry_msgs.msg import PoseStamped, Pose, Point
 from racecar_routing.srv import Plan, PlanResponse, PlanRequest
 #from You_Need_to_Define_the_import_Path_Here import RefPath
 
+from nav_msgs.msg import Odometry
+from nav_msgs.msg import Path as PathMsg
+
 import threading
 import time
 
 # Pull in all needed info/services as descirbed in readme file
 
-class Task2_edit:
+class Task2_Controller:
     def __init__(self):
+        self.truck_x = 0
+        self.truck_y = 0
+
+
         ##### Start swifthaul via call to service
         rospy.wait_for_service('/SwiftHaul/Start')
         self.start_client = rospy.ServiceProxy('/SwiftHaul/Start', Empty)
@@ -112,22 +119,57 @@ class Task2_edit:
         rospy.wait_for_service('/routing/plan')
         self.plan_client = rospy.ServiceProxy('/routing/plan', Plan)
 
+
+        self.odom_topic = get_ros_param('~odom_topic', '/slam_pose')
+        self.pose_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odometry_callback, queue_size=10)
+        
+
+
+
+
+        # set up publisher for trajectory received from routing
+        self.path_topic = get_ros_param('~path_topic', '/Routing/Path')
+        self.path_pub = rospy.Publisher(self.path_topic, PathMsg, queue_size=1)
+
+
+
         threading.Thread(target=self.loop).start()
 
 
         print("Set up task 2 node successfully")
+    
+    def odometry_callback(self, odom_msg):
+        '''
+        Subscriber callback function of the robot pose
+        '''
+        # Add the current state to the buffer
+        # Controller thread will read from the buffer
+        # Then it will be processed and add to the planner buffer 
+        # inside the controller thread
+        #self.control_state_buffer.writeFromNonRT(odom_msg)
+
+
+        #just set variables
+        self.truck_x = odom_msg.pose.pose.position.x
+        self.truck_y = odom_msg.pose.pose.position.y
+
+        print("updated to ", self.truck_x, self.truck_y)
+
+
 
     def loop(self):
-        # while(True):
-        #     print("start publish loop")
-        #     time.sleep(5)
-        #     self.goal_pub.publish(PoseStamped(pose=Pose(position=Point(x=3, y=0.15))))
-        #     print("1 publish")
-
-        #evaluate positions, etc
-        #todo: copy in a proper thread loop from swifthaul
-
-        pass
+        time.sleep(5)
+        warehouses = list(self.warehouse_info.keys())
+        print("warehouses: ", warehouses)
+        idx = 0
+        while rospy.is_shutdown() is False:  
+            
+            
+            self.go_to(* self.warehouse_info[warehouses[idx]]["location"])
+            print("published a message for ",warehouses[idx])
+            time.sleep(10)
+            idx+=1
+            if idx==5: idx=0
 
     def truck_in_warehouse(x, y, warehouse_name, warehouse_info):
         w_x = warehouse_info[warehouse_name]['location'][0]
@@ -136,19 +178,18 @@ class Task2_edit:
     
     def go_to(self, x_goal, y_goal):
         # todo: get x start and y start from car current position
-        x_start = 0
-        y_start = 0
+        #subscribe to slam nodes SLAM/Pose
 
         # Call the routing service
-        plan_request = PlanRequest([x_start, y_start], [x_goal, y_goal])
+        plan_request = PlanRequest([self.truck_x, self.truck_y], [x_goal, y_goal])
         plan_response = self.plan_client(plan_request)
 
         #convert PlanMsg to PathMsg
         #untested
         path_msg = plan_response.path
 
-        #Publish PathMsg to a traj_topic that traj_planner is listening to 
-        #todo
+        #Publish PathMsg to a path_topic that traj_planner is listening to 
+        self.path_pub.publish(path_msg)
 
         #traj_planner then automatically converts to RefPath, plans, and sends out control input
 
