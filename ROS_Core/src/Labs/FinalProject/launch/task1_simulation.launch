@@ -10,10 +10,13 @@
     <arg name="init_y"              default="0.15"                     doc="initial y position"/>
     <arg name="init_yaw"            default="0"                     doc="initial z position"/>
     <arg name="num_dyn_obs"         default="0"                     doc="number of dynamic obsects"/>
-    <arg name="num_static_obs"      default="20"                     doc="number of static obsects"/>
+    <arg name="num_static_obs"      default="2"                     doc="number of static obsects"/>
     <arg name="static_obs_size"     default="0.2"                   doc="type of static obsects"/>
     <arg name="static_obs_topic"    default="/Obstacles/Static"     doc="ROS topic for static obstacles"/>
     <arg name="dyn_obs_topic"       default="/Obstacles/Dynamic"    doc="ROS topic for dynamic obstacles"/>
+    <arg name="obstacle_topic"      default="/Prediction/Obstacles" doc="ROS topic for obstacles"/>
+    <!-- <arg name="traj_topic"          default="/Planning/Trajectory"  doc="ROS topic for trajectory"/> -->
+    <arg name="path_topic"          default="/Routing/Path"         doc="ROS topic for reference path"/>
     
     <rosparam file="$(find final_project)/task1.yaml" command="load" />
 
@@ -40,16 +43,33 @@
         <param name="odom_topic"           value="$(arg odom_topic)" />
         <param name="control_topic"        value="$(arg control_topic)"/>
     </node>
+
+    <node pkg="final_project" type="task1_waypoint_nav_node.py" name="task1_waypoint_nav_node" output="$(arg output)">
+        <param name="odom_topic"           value="$(arg odom_topic)" />
+        <param name="path_topic"           value="$(arg path_topic)" />
+    </node>
+   
+    <node pkg="racecar_planner" type="traj_planning_node.py" name="traj_planning" output="$(arg output)">
+        <param name="odom_topic"           value="$(arg odom_topic)" />
+        <param name="control_topic"        value="$(arg control_topic)" />
+        <param name="obstacle_topic"       value="$(arg obstacle_topic)" />
+        <param name="package_path"         value="$(find racecar_planner)" />
+        <param name="simulation"           value="True" />
+        <param name="replan_dt"            value="0.1" />
+        <param name="receding_horizon"     value="true" />
+        <param name="ilqr_params_file"     value="configs/lab1.yaml" />
+        <param name="PWM_model"            value="$(find racecar_planner)/configs/mlp_model.sav" />
+    </node>
     
     <include file="$(find racecar_routing)/launch/visualize_map.launch">
             <arg name="output"              value="$(arg output)"/>
     </include>
 
     <include file="$(find racecar_routing)/launch/routing.launch">
-            <arg name="output"              value="$(arg output)"/>
-            <arg name="odom_topic"          value="$(arg odom_topic)"/>
-            <arg name="lane_change_cost"    value="$(arg lane_change_cost)"/>
-            <arg name="click_goal"          value="false"/>
+        <arg name="output"              value="$(arg output)"/>
+        <arg name="odom_topic"          value="$(arg odom_topic)"/>
+        <arg name="lane_change_cost"    value="$(arg lane_change_cost)"/>
+        <arg name="click_goal"          value="false"/>
     </include>
 
     <node type="rviz" name="rviz" pkg="rviz" 
