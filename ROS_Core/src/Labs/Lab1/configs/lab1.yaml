@@ -11,7 +11,7 @@ platform: "cpu" # "cpu" or "gpu" or "tpu"
 ####################################################
 ###########Optimization Parameters #################
 ####################################################        
-max_iter: 50 # maximum number of iterations
+max_iter: 20 # maximum number of iterations
 # tolerance for the ILQR convergence
 # Make sure this is smaller than the minimum line search step size
 tol: 0.05
@@ -115,4 +115,4 @@ ctrl_cost_steer_huber_delta: 1.0 # huber loss delta
 
 ########        Obstacle Cost          ############
 obs_a: 10.0 # parameter for obstacle cost
-obs_b: 10.0 # parameter for ExpLinear Cost
+obs_b: 5.0 # parameter for ExpLinear Cost

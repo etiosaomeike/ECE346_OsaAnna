@@ -7,7 +7,7 @@
     <arg name="lane_change_cost"    default="1"                     doc="cost of lane change"/>
     <arg name="pub_rate"            default="30"                    doc="rate at which to publish the pose"/>
     <arg name="init_x"              default="3"                     doc="initial x position"/>
-    <arg name="init_y"              default="0.15"                     doc="initial y position"/>
+    <arg name="init_y"              default="0.15"                  doc="initial y position"/>
     <arg name="init_yaw"            default="0"                     doc="initial z position"/>
     <arg name="num_dyn_obs"         default="0"                     doc="number of dynamic obsects"/>
     <arg name="num_static_obs"      default="2"                     doc="number of static obsects"/>
@@ -57,7 +57,7 @@
         <param name="simulation"           value="True" />
         <param name="replan_dt"            value="0.1" />
         <param name="receding_horizon"     value="true" />
-        <param name="ilqr_params_file"     value="configs/lab1.yaml" />
+        <param name="ilqr_params_file"     value="/Users/jeremiahomeike/Desktop/ECE346_OsaAnna/ECE346_OsaAnna/ROS_Core/src/Labs/Lab1/configs/lab1.yaml" />
         <param name="PWM_model"            value="$(find racecar_planner)/configs/mlp_model.sav" />
     </node>
     

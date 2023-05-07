@@ -62,32 +62,38 @@ class Task1_Controller:
         path.header.stamp = rospy.get_rostime()
         path.header.frame_id = 'map'
         self.path_pub.publish(path)
-        print("We published the path woot!!!")
     
     def loop(self):
         pointer = 0
-        threshold = .5
-
+        threshold = .8
+        x = self.truck_x
+        y = self.truck_y
+        state = np.array([x, y])
+        norm = np.linalg.norm(state - self.goal_positions[self.goal_order[pointer]])
+        
         while rospy.is_shutdown() is False:
        ##     if pointer == 0:   
-               # for idx in range(len(self.list_of_goals))         
+               # for idx in range(len(self.list_of_goals))      
+               #   
             x = self.truck_x
             y = self.truck_y
             state = np.array([x, y])
 
             norm = np.linalg.norm(state - self.goal_positions[self.goal_order[pointer]])
-            print("The norm is ", norm)
+            if (pointer == 0) or (pointer == 1):
+                self.pub_ref_path(state, self.goal_positions[self.goal_order[pointer]])
+                print("We published the path becuase the pointer is currently 0 or 1!!!")
+
             if norm < threshold:
                 pointer += 1
+                self.pub_ref_path(state, self.goal_positions[self.goal_order[pointer]])
                 print("Print we're at a new pointer now")
-                rospy.sleep(.5)
                 
             else:
-                self.pub_ref_path(state, self.goal_positions[self.goal_order[pointer]])
-                print("We're going to ", self.goal_order[pointer] + 1, " for our next state!")
-                rospy.sleep(.5)
+                pass
+               # rospy.sleep(.6)
 
-            if pointer > len(self.goal_order) - 1:
+            if pointer >= len(self.goal_order) - 1:
                 break
 
     
