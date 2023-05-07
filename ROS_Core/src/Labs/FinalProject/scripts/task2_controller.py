@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import rospy
+import numpy as np
 from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
 import yaml
 from task2_world.util import get_ros_param
@@ -24,18 +25,15 @@ class Task2_Controller:
     def __init__(self):
         self.truck_x = 0
         self.truck_y = 0
+        self.boss_x = 0
+        self.boss_y = 0
 
 
-        ##### Start swifthaul via call to service
-        rospy.wait_for_service('/SwiftHaul/Start')
-        self.start_client = rospy.ServiceProxy('/SwiftHaul/Start', Empty)
-        # call the service
-        self.start_client(EmptyRequest())
 
         ##### Get Warehouse Info
-        self.warehouse_yaml = get_ros_param("/task2_world_node/warehouse_yaml", None)
-        with open(self.warehouse_yaml, "r") as stream:
-            self.warehouse_info = yaml.safe_load(stream)
+        warehouse_yaml = get_ros_param("/task2_world_node/warehouse_yaml", None)
+        with open(warehouse_yaml, "r") as stream:
+            warehouse_info = yaml.safe_load(stream)
         #print("WAREHOUSE INFO",warehouse_info)
         #output:
         # {'warehouse_A': {'id': 0, 'location': [3, 0.15], 'dxdy': [0.5, 0.25], 'probability': [0.3, 0.05, 0.15, 0.3, 0.2]}, 
@@ -43,10 +41,26 @@ class Task2_Controller:
         # 'warehouse_C': {'id': 2, 'location': [0.15, 3.5], 'dxdy': [0.25, 0.5], 'probability': [0.5, 0.3, 0.1, 0.05, 0.05]}, 
         # 'warehouse_D': {'id': 3, 'location': [3, 2.2], 'dxdy': [0.5, 0.5], 'probability': [0.2, 0.2, 0.3, 0.1, 0.2]}, 
         # 'warehouse_E': {'id': 4, 'location': [3, 1.1], 'dxdy': [0.5, 0.25], 'probability': [0.2, 0.1, 0.3, 0.25, 0.15]}}
+        self.warehouses = []
+        for k in warehouse_info.keys():
+            self.warehouses.append(warehouse_info[k])
+            self.warehouses[-1]["name"] = k
+        #now, have list of dictionaries accessible by index, but can still get name
+
+        
 
         #We consider the truck is in the warehouse when it is 
         # less than 0.5 meters away in longitudinal direction and 
         # 0.25 meters away in lateral direction.
+
+        #warehouse_distances[i][j] is the approx rospy time it takes to get from warehouse i to warehouse j
+        self.warehouse_distances = [
+            [0.0, 8.6, 18.7, 16.3, 21.9],
+            [16.7, 0.0, 12.6, 10.4, 16.0],
+            [6.8, 14.0, 0.0, 21.9, 26.9],
+            [15.8, 22.9, 11.6, 0.0, 6.7],
+            [20.7, 27.7, 16.7, 3.0, 0.0]
+            ]
 
 
         ##### Get Boss Schedule
@@ -116,74 +130,73 @@ class Task2_Controller:
         # respond.done # bool, the status of the task. If the task is done, it will be True
         # respond.total_reward # float, the total reward of so far
 
+        ### basic navigation/world ###
         rospy.wait_for_service('/routing/plan')
         self.plan_client = rospy.ServiceProxy('/routing/plan', Plan)
-
-
         self.odom_topic = get_ros_param('~odom_topic', '/Simulation/Pose')
         self.pose_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odometry_callback, queue_size=10)
-        
-
-
-
-
+        self.boss_pose_sub = rospy.Subscriber("/Boss/Pose", Odometry, self.boss_pose_callback, queue_size=10)
         # set up publisher for trajectory received from routing
         self.path_topic = get_ros_param('~path_topic', '/Routing/Path')
         self.path_pub = rospy.Publisher(self.path_topic, PathMsg, queue_size=1)
 
-
+        for i in range(50):
+            time.sleep(1)
+            print("timeout:",i)
+            if rospy.is_shutdown(): break
 
         threading.Thread(target=self.loop).start()
+
+
+        ##### Start swifthaul via call to service
+        rospy.wait_for_service('/SwiftHaul/Start')
+        self.start_client = rospy.ServiceProxy('/SwiftHaul/Start', Empty)
+        # call the service
+        self.start_client(EmptyRequest())
 
 
         print("Set up task 2 node successfully")
     
     def odometry_callback(self, odom_msg):
-        '''
-        Subscriber callback function of the robot pose
-        '''
-        # Add the current state to the buffer
-        # Controller thread will read from the buffer
-        # Then it will be processed and add to the planner buffer 
-        # inside the controller thread
-        #self.control_state_buffer.writeFromNonRT(odom_msg)
-
-
-        #just set variables
         self.truck_x = odom_msg.pose.pose.position.x
         self.truck_y = odom_msg.pose.pose.position.y
 
-        #print("updated to ", self.truck_x, self.truck_y)
-
+    def boss_pose_callback(self, odom_msg):
+        self.boss_x = odom_msg.pose.pose.position.x
+        self.boss_y = odom_msg.pose.pose.position.y
 
 
     def loop(self):
-        time.sleep(15)
-        warehouses = list(self.warehouse_info.keys())
-        print("warehouses: ", warehouses)
+        warehouses = self.warehouses
         idx = 0
-        while rospy.is_shutdown() is False:  
-            self.go_to(* self.warehouse_info[warehouses[idx]]["location"])
-            print("published a message for ",warehouses[idx])
-            time.sleep(15)
-            idx+=1
-            if idx==5: idx=0
+        self.go_to(* self.warehouse_info[warehouses[idx]]["location"])
+        while rospy.is_shutdown() is False:  #check shutdown condition in ALL LOOPS
+            self.go_to_warehouse(idx)
+            while not self.truck_in_warehouse(idx) and not rospy.is_shutdown():
+                time.sleep(0.2)
+            break
 
-    def truck_in_warehouse(self, warehouse_name):
-        w_x = self.warehouse_info[warehouse_name]['location'][0]
-        w_y = self.warehouse_info[warehouse_name]['location'][1]
-        return abs(w_x-self.truck_x)<0.5 and abs(w_y-self.truck_y)<0.25
+    def truck_in_warehouse(self, w_idx):
+        w_loc = self.warehouses[w_idx]["location"]
+        in_warehouse = abs(w_loc[0]-self.truck_x)<0.5 and abs(w_loc[1]-self.truck_y)<0.25
+        print("truck is in",self.warehouses[w_idx]["name"])
+        return in_warehouse
     
+    def dist_between(self, w1, w2):
+        return self.warehouse_distances[w1][w2]
+
+    def go_to_warehouse(self, w_idx):
+        print("going to ",self.warehouses[w_idx]["name"])
+        self.go_to(* self.warehouses[w_idx]["location"])
+
     def go_to(self, x_goal, y_goal):
-        # todo: get x start and y start from car current position
-        #subscribe to slam nodes SLAM/Pose
+        #subscribe to slam nodes SLAM/Pose if you want physical truck
 
         # Call the routing service
         plan_request = PlanRequest([self.truck_x, self.truck_y], [x_goal, y_goal])
         plan_response = self.plan_client(plan_request)
 
         #convert PlanMsg to PathMsg
-        #untested
         path_msg = plan_response.path
 
         path_msg.header.stamp = rospy.get_rostime()
@@ -192,8 +205,17 @@ class Task2_Controller:
         #Publish PathMsg to a path_topic that traj_planner is listening to 
         self.path_pub.publish(path_msg)
 
-        #traj_planner then automatically converts to RefPath, plans, and sends out control input
+    def get_boss_task(self):
+        pass
 
+    def get_side_task(self):
+        pass
+
+    def get_boss_schedule(self):
+        pass
+
+    def collect_reward(self):
+        pass
 
 
 

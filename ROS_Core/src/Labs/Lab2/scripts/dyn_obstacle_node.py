@@ -2,6 +2,7 @@
 import rospy
 import numpy as np
 from frs import FRS
+from nav_msgs.msg import Odometry
 from racecar_msgs.msg import OdometryArray, SetArray
 from geometry_msgs.msg import Polygon, Point32
 from racecar_obs_detection.srv import GetFRS, GetFRSResponse
@@ -31,6 +32,8 @@ class DynObstacle():
         # Read ROS topic names to subscribe 
         self.dyn_obs_topic = get_ros_param('~dyn_obs_topic', '/Obstacles/Dynamic')
 
+        self.boss_dyn_obs_topic = "/Boss/Pose"
+
         self.frs = FRS()
         
 
@@ -48,7 +51,9 @@ class DynObstacle():
         ###############################################
         # Class variable to store the most recent dynamic obstacle's poses
         self.dyn_obstacles = []
+        self.boss_dyn_obstacle = None
         self.frs_sub = rospy.Subscriber(self.dyn_obs_topic, OdometryArray, self.frs_callback, queue_size=10)
+        self.boss_pose_sub = rospy.Subscriber(self.boss_dyn_obs_topic, Odometry, self.boss_pose_callback, queue_size=10)
         ###############################################
         ############## TODO ###########################
         # 1. Create a Dynamic Reconfigure Server to get <configConfig> message
@@ -105,6 +110,28 @@ class DynObstacle():
         Subscriber callback function of the dynamic obstacles
         '''
         self.dyn_obstacles = odom_msg.odom_list
+    
+    def boss_pose_callback(self, single_odom_msg):
+        # odom_msg = Odometry()
+        # odom_msg.header = single_odom_msg.header
+        # p = single_odom_msg.pose.pose.position
+        # odom_msg.pose.pose.position.x = p.x
+        # odom_msg.pose.pose.position.y = p.y
+        # odom_msg.pose.pose.position.z = 0
+        # #print("boss pos", p.x, p.y)
+        
+        # q = single_odom_msg.pose.pose.orientation
+        # odom_msg.pose.pose.orientation.x = q.x
+        # odom_msg.pose.pose.orientation.y = q.y
+        # odom_msg.pose.pose.orientation.z = q.z
+        # odom_msg.pose.pose.orientation.w = q.w
+        # #print("boss orient", q.x, q.y, q.z, q.w)
+        
+        # odom_msg.twist.twist.linear.x = single_odom_msg.twist.twist.linear.x
+        # odom_msg.twist.twist.linear.y = single_odom_msg.twist.twist.linear.y
+        # #print("boss twist xy", single_odom_msg.twist.twist.linear.x, single_odom_msg.twist.twist.linear.x)
+        self.boss_dyn_obstacle = single_odom_msg
+
 
     def srv_cb(self, req):
         '''
@@ -112,10 +139,16 @@ class DynObstacle():
         '''
         t_list = req.t_list
         respond = GetFRSResponse() # Create a empty list 
-        for obstacle in self.dyn_obstacles: # Iterate through all dynamic obstacles
+        for obstacle in [* self.dyn_obstacles, self.boss_dyn_obstacle]: # Iterate through all dynamic obstacles
             frs_list = self.frs.get(obstacle, t_list, self.K_vx, self.K_vy, self.K_y, self.dx, self.dy, allow_lane_change=self.allow_lane_change)
-            for frs in frs_list: #  Iterate through N possible FRSs
+            #print("obstacle", obstacle)
+            for frs in frs_list: #  Iterate through N possible FRSs         
                 respond.FRS.append(frs2setarray(frs))
+        # if(self.boss_dyn_obstacle):
+        #     #print("boss dyn obstacle", self.boss_dyn_obstacle)
+        #     frs_list2 = self.frs.get(self.dyn_obstacles[0], t_list, self.K_vx, self.K_vy, self.K_y, self.dx, self.dy, allow_lane_change=self.allow_lane_change)
+        #     for frs in frs_list2: #  Iterate through N possible FRSs
+        #         respond.FRS.append(frs2setarray(frs))
         return respond
     
 if __name__ == '__main__':
