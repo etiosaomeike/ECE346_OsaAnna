@@ -28,6 +28,13 @@ class Task2_Controller:
         self.boss_x = 0
         self.boss_y = 0
 
+        self.boss_recent_positions = []
+        self.boss_pos_track_counter = 0
+        self.track_pos_every_x_messages = 5
+        self.boss_safe_dist = 0.3
+        self.safe_boss_target_x = 0
+        self.safe_boss_target_y = 0
+
 
 
         ##### Get Warehouse Info
@@ -131,19 +138,20 @@ class Task2_Controller:
         # respond.total_reward # float, the total reward of so far
 
         ### basic navigation/world ###
+        print("try to wait for ilqr warmup")
+        rospy.wait_for_service('/planning/start_planning')
+
         rospy.wait_for_service('/routing/plan')
         self.plan_client = rospy.ServiceProxy('/routing/plan', Plan)
+
+
         self.odom_topic = get_ros_param('~odom_topic', '/Simulation/Pose')
         self.pose_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odometry_callback, queue_size=10)
         self.boss_pose_sub = rospy.Subscriber("/Boss/Pose", Odometry, self.boss_pose_callback, queue_size=10)
+       
         # set up publisher for trajectory received from routing
         self.path_topic = get_ros_param('~path_topic', '/Routing/Path')
         self.path_pub = rospy.Publisher(self.path_topic, PathMsg, queue_size=1)
-
-        for i in range(50):
-            time.sleep(1)
-            print("timeout:",i)
-            if rospy.is_shutdown(): break
 
         threading.Thread(target=self.loop).start()
 
@@ -165,18 +173,81 @@ class Task2_Controller:
         self.boss_x = odom_msg.pose.pose.position.x
         self.boss_y = odom_msg.pose.pose.position.y
 
+        #only record, for example, every 5th message
+        if self.boss_pos_track_counter == 0:
+            self.boss_recent_positions.insert(0, [self.boss_x, self.boss_y])
+            # check if there are more messages on the end than we need
+            #iterate backwards
+            counter = 1
+            while (counter < len(self.boss_recent_positions)): #say array is length 5, stop at arr[-4] which is the second element
+                if self.dist_to_boss(self.boss_recent_positions[-1 * counter]) < self.boss_safe_dist:
+                    break
+                counter += 1
+            #now, counter is set to the first 'dangerous' index from the end 
+            # say counter=4 that means the last 3 items are "safe"
+            # we only need 1 safe item
+            items_to_remove = counter - 2
+            while(items_to_remove > 0):
+                self.boss_recent_positions.pop()
+                items_to_remove -= 1
+            
+            #now we have at least 1 safe item at the end of the list
+            if counter != 1:
+                self.safe_boss_target_x = self.boss_recent_positions[-1][0]
+                self.safe_boss_target_y = self.boss_recent_positions[-1][1]
+
+        self.boss_pos_track_counter += 1
+        if self.boss_pos_track_counter == self.track_pos_every_x_messages:
+            self.boss_pos_track_counter = 0
+
 
     def loop(self):
-        warehouses = self.warehouses
-        idx = 0
-        self.go_to(* self.warehouse_info[warehouses[idx]]["location"])
+        #warehouses = self.warehouses
+        #idx = 0
+        #self.go_to(* self.warehouse_info[warehouses[idx]]["location"])
+        doing_boss_task = False
+        task = -1
+        planned_reward = 0
+
+        while rospy.is_shutdown() is False and (self.safe_boss_target_x == self.safe_boss_target_y): 
+            time.sleep(1)
+            print("waiting for safe boss target...")
         while rospy.is_shutdown() is False:  #check shutdown condition in ALL LOOPS
-            self.go_to_warehouse(idx)
-            while not self.truck_in_warehouse(idx) and not rospy.is_shutdown():
-                time.sleep(0.2)
-            break
+            #self.go_to_warehouse(idx)
+            doing_boss_task = False
+            task = -1
+            planned_reward = 0
+            while not doing_boss_task and not rospy.is_shutdown():
+                task, planned_reward = self.get_boss_task()
+                if task != -1:
+                    doing_boss_task = True
+                time.sleep(1)
+                print("waiting for boss task...")
+            
+            if doing_boss_task:
+                timeout = 45
+                while timeout > 0 and not self.truck_in_warehouse(task):
+                    self.go_to_warehouse(task)
+                    timeout -= 5
+                    time.sleep(5)
+                if timeout == 0:
+                    print("failed this task")
+                    continue
+                done, total = self.collect_reward(task)
+                if not done:
+                    print("It didn't think we were actually done with the task...")
+                else:
+                    print("Finished task. Total reward so far is ", total)
+                
+                
+
+            # print("following boss to ",self.safe_boss_target_x, self.safe_boss_target_y)
+            # self.go_to(self.safe_boss_target_x, self.safe_boss_target_y)
+            # time.sleep(5)
+
 
     def truck_in_warehouse(self, w_idx):
+        if w_idx == -1: return False
         w_loc = self.warehouses[w_idx]["location"]
         in_warehouse = abs(w_loc[0]-self.truck_x)<0.5 and abs(w_loc[1]-self.truck_y)<0.25
         print("truck is in",self.warehouses[w_idx]["name"])
@@ -206,7 +277,8 @@ class Task2_Controller:
         self.path_pub.publish(path_msg)
 
     def get_boss_task(self):
-        pass
+        respond = self.bosstask_client(TaskRequest())
+        return respond.task, respond.reward
 
     def get_side_task(self):
         pass
@@ -214,8 +286,13 @@ class Task2_Controller:
     def get_boss_schedule(self):
         pass
 
-    def collect_reward(self):
-        pass
+    def collect_reward(self,task):
+        respond = self.reward_client(RewardRequest(task))
+        return respond.done, respond.total_reward
+
+    def dist_to_boss(self, p1):
+        dist = np.linalg.norm([p1[0] - self.boss_x, p1[1] - self.boss_y])
+        return dist
 
 
 
