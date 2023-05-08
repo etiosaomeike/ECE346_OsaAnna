@@ -31,7 +31,7 @@ class Task2_Controller:
         self.boss_recent_positions = []
         self.boss_pos_track_counter = 0
         self.track_pos_every_x_messages = 2
-        self.boss_safe_dist = 0.4
+        self.boss_safe_dist = 0.5
         self.safe_boss_target_x = 0
         self.safe_boss_target_y = 0
 
@@ -67,7 +67,7 @@ class Task2_Controller:
         self.plan_client = rospy.ServiceProxy('/routing/plan', Plan)
 
         #Student Pose subscriber
-        self.odom_topic = get_ros_param('~odom_topic', '/Simulation/Pose')
+        self.odom_topic = get_ros_param('~odom_topic', "/slam_pose") #'/Simulation/Pose')
         self.pose_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odometry_callback, queue_size=10)
         #Boss Pose subscriber
         self.boss_pose_sub = rospy.Subscriber("/Boss/Pose", Odometry, self.boss_pose_callback, queue_size=10)
@@ -158,19 +158,41 @@ class Task2_Controller:
                 doing_boss_task, task = self.take_boss_task()
                 if doing_boss_task:
                     #self.do_task(schedule[boss_task][0], schedule[boss_task][1])
+                    timeout=30
+                    while not rospy.is_shutdown() and timeout > 0 and not self.truck_in_warehouse(schedule[boss_task][0]):
+                        self.go_to_warehouse(schedule[boss_task][0])
+                        timeout -= 5
+                        time.sleep(5)
+                    if timeout == 0:
+                        print("failed this task by timeout while trying to reach start warehouse")
+                        continue
+                    doing_boss_task, task = self.take_boss_task()
                     self.follow_boss_to(task)
-            # if self.some_side_task_available():
-            #     task, _ = self.get_side_task()
-            #     if task == -1:
-            #         time.sleep(1)
-            #     else:
-            #         self.do_side_task(task)
-            # else:
-            #     time.sleep(1)
-
-            
-            time.sleep(1)
-
+                else:
+                    #self.do_task(schedule[boss_task][0], schedule[boss_task][1])
+                    timeout=10
+                    while not rospy.is_shutdown() and timeout > 0 and not self.truck_in_warehouse(schedule[boss_task][0]):
+                        self.go_to_warehouse(schedule[boss_task][0])
+                        timeout -= 5
+                        time.sleep(5)
+                    if timeout == 0:
+                        print("failed this task by timeout while trying to reach start warehouse")
+                        continue
+                    doing_boss_task, task = self.take_boss_task()
+                    if doing_boss_task:
+                        self.follow_boss_to(task)
+            elif self.some_side_task_available():
+                task, _ = self.get_side_task()
+                if task == -1:
+                    print("Lost! going to warehouse A to find more side tasks")
+                    self.go_to_warehouse(0)
+                    time.sleep(1)
+                else:
+                    self.do_side_task(task)
+            else:
+                print("no tasks")
+                time.sleep(1)
+                if rospy.is_shutdown(): break
 
     # Do the first boss task, then do a side task
 
@@ -178,7 +200,9 @@ class Task2_Controller:
         t = rospy.get_time() - self.ros_start_time
         for i in range(len(schedule)):
             if t+2 >= schedule[i][3] and t-5 <= schedule[i][3]:
+                print("According to the schedule, the",i,"-th boss task should be available")
                 return i
+
         print("No boss task was available at t=",t)
         return -1
     
@@ -189,9 +213,12 @@ class Task2_Controller:
         while not rospy.is_shutdown() and timeout > 0 and not self.truck_in_warehouse(task):
             #print("following boss to ",self.safe_boss_target_x, self.safe_boss_target_y)
             self.go_to(self.safe_boss_target_x, self.safe_boss_target_y)
-            time.sleep(1)
-            timeout -= 1
-        self.collect_reward(task)
+            time.sleep(4)
+            timeout -= 4
+        if timeout == 0:
+            print("Timed out while following boss")
+        else:
+            self.collect_reward(task)
 
     
     def take_boss_task(self, timeout=5):
@@ -200,7 +227,7 @@ class Task2_Controller:
             task, _ = self.get_boss_task()
             if task != -1:
                 doing_boss_task = True
-                print("Accepted boss task to ", task)
+                print("Accepted boss task to warehouse", task)
                 break
             # else:
             #     next_start, next_task, next_reward, next_leavetime = self.get_boss_schedule()
@@ -279,7 +306,8 @@ class Task2_Controller:
     def truck_in_warehouse(self, w_idx):
         if w_idx == -1: return False
         w_loc = self.warehouses[w_idx]["location"]
-        in_warehouse = abs(w_loc[0]-self.truck_x)<0.25 and abs(w_loc[1]-self.truck_y)<0.5
+        w_dxdy = self.warehouses[w_idx]["dxdy"]
+        in_warehouse = abs(w_loc[0]-self.truck_x)<w_dxdy[0] and abs(w_loc[1]-self.truck_y)<w_dxdy[1]
         print("truck is in",self.warehouses[w_idx]["name"], ":",in_warehouse)
         return in_warehouse
     
