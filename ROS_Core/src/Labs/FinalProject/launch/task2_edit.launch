@@ -1,6 +1,6 @@
 <launch>
     <arg name="output"              default="screen"                doc="display output to screen or log file"/>
-    <arg name="odom_topic"          default="/Simulation/Pose"      doc="ROS topic for the pose"/>
+    <arg name="odom_topic"          default="/slam_pose"      doc="ROS topic for the pose"/>
     <arg name="control_topic"       default="/Control"              doc="ROS topic for control input"/>
     <arg name="obstacle_topic"      default="/Prediction/Obstacles" doc="ROS topic for obstacles"/>
     <arg name="pub_rate"            default="20"                    doc="rate at which to publish the pose"/>
@@ -65,7 +65,7 @@
         <param name="control_topic"        value="$(arg control_topic)" />
         <param name="obstacle_topic"       value="$(arg obstacle_topic)" />
         <param name="package_path"         value="$(find racecar_planner)" />
-        <param name="simulation"           value="True" />
+        <param name="simulation"           value="False" />
         <param name="replan_dt"            value="0.1" />
         <param name="receding_horizon"     value="true" />
         <param name="ilqr_params_file"     value="/mnt/c/Users/miche/OneDrive/repos/ECE346_OsaAnna/ROS_Core/src/Labs/Lab1/configs/lab2_task2.yaml" />
@@ -94,7 +94,7 @@
         <param name="PWM_model"                 value="$(find final_project)/pwm.sav" />
         <param name="boss_odom_topic"           value="/Boss/Pose" />
         <param name="boss_control_topic"        value="/Boss/servo_control" />
-        <param name="simulation"                value="True" />
+        <param name="simulation"                value="False" />
     </node>
 
 </launch>
