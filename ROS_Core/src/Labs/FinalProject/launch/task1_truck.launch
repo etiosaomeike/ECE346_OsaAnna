@@ -9,7 +9,7 @@
     <arg name="path_topic"          default="/Routing/Path"         doc="ROS topic for reference path"/>
     <arg name="receding_horizon"    default="true"                 doc="whether to use receding horizon planner"/>
     <arg name="replan_dt"           default="0.1"                   doc="time step for replanning"/>
-    <arg name="ilqr_config"         default="/Users/jeremiahomeike/Desktop/ECE346_OsaAnna/ECE346_OsaAnna/ROS_Core/src/Labs/Lab1/configs/lab1.yaml"     doc="path to ilqr config file"/>
+    <arg name="ilqr_config"         default="/Users/jeremiahomeike/Desktop/ECE346_OsaAnna/ECE346_OsaAnna/ROS_Core/src/Labs/Lab1/configs/lab2_task1.yaml"     doc="path to ilqr config file"/>
     <arg name="lane_change_cost"    default="1"                     doc="cost of lane change"/>
     <arg name="static_obs_size"     default="0.2"                   doc="type of static obsects"/>
     <arg name="static_obs_topic"    default="/Obstacles/Static"     doc="ROS topic for static obstacles"/>

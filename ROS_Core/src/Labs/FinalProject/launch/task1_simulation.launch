@@ -57,7 +57,7 @@
         <param name="simulation"           value="True" />
         <param name="replan_dt"            value="0.1" />
         <param name="receding_horizon"     value="true" />
-        <param name="ilqr_params_file"     value="/Users/jeremiahomeike/Desktop/ECE346_OsaAnna/ECE346_OsaAnna/ROS_Core/src/Labs/Lab1/configs/lab1.yaml" />
+        <param name="ilqr_params_file"     value="/Users/jeremiahomeike/Desktop/ECE346_OsaAnna/ECE346_OsaAnna/ROS_Core/src/Labs/Lab1/configs/lab2_task1.yaml" />
         <param name="PWM_model"            value="$(find racecar_planner)/configs/mlp_model.sav" />
     </node>
     

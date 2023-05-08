@@ -115,4 +115,4 @@ ctrl_cost_steer_huber_delta: 1.0 # huber loss delta
 
 ########        Obstacle Cost          ############
 obs_a: 10.0 # parameter for obstacle cost
-obs_b: 5.0 # parameter for ExpLinear Cost
+obs_b: 10.0 # parameter for ExpLinear Cost

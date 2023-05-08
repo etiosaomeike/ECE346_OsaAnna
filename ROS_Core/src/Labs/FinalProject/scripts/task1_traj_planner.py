@@ -20,8 +20,10 @@ class Task1_Controller:
         self.goal_positions, self.goal_order = self.parse_yaml("/Users/jeremiahomeike/Desktop/ECE346_OsaAnna/ECE346_OsaAnna/ROS_Core/src/Labs/FinalProject/task1.yaml")
         self.path_topic = get_ros_param('~path_topic', '/Routing/Path')
         self.odom_topic = get_ros_param('~odom_topic', '/Simulation/Pose')
+        self.static_obs_topic = get_ros_param('')
         self.setup_clients()
         self.pose_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odometry_callback, queue_size=10)
+       # self.static_obs_sub = rospy.Subscriber(self.)
 
         threading.Thread(target=self.loop).start()
 
@@ -58,6 +60,7 @@ class Task1_Controller:
 
         plan_request = PlanRequest([x_start, y_start], [x_goal, y_goal])
         plan_response = self.plan_client(plan_request)
+
         path = plan_response.path
         path.header.stamp = rospy.get_rostime()
         path.header.frame_id = 'map'
@@ -65,7 +68,7 @@ class Task1_Controller:
     
     def loop(self):
         pointer = 0
-        threshold = .8
+        threshold = .5
         x = self.truck_x
         y = self.truck_y
         state = np.array([x, y])
@@ -82,7 +85,6 @@ class Task1_Controller:
             norm = np.linalg.norm(state - self.goal_positions[self.goal_order[pointer]])
             if (pointer == 0) or (pointer == 1):
                 self.pub_ref_path(state, self.goal_positions[self.goal_order[pointer]])
-                print("We published the path becuase the pointer is currently 0 or 1!!!")
 
             if norm < threshold:
                 pointer += 1
