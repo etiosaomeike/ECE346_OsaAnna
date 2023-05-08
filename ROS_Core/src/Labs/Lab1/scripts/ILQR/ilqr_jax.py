@@ -71,6 +71,8 @@ class ILQR_jax():
 			self.obstacle_list.append(Obstacle(vertices))
 
 	def get_references(self, trajectory):
+		if np.any(np.isnan(trajectory)):
+			print("NAN in trajectory ",trajectory)
 		states_np = np.asarray(trajectory)
 		path_refs = self.ref_path.get_reference(states_np[:2, :])
 		obs_refs = self.collision_checker.check_collisions(states_np, self.obstacle_list)

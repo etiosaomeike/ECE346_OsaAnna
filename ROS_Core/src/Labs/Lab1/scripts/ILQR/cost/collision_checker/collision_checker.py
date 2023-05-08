@@ -92,7 +92,7 @@ class CollisionChecker:
         
         output = np.array([ego_point[0], ego_point[1], obj_point_global[0], obj_point_global[1], distance])
         if np.any(np.isnan(output)):
-            print("NAN in collision")
+            print("NAN in collision with state ",state)
         return output
     
     def check_collisions(self, state: np.ndarray, obstacles: list) -> np.ndarray:
